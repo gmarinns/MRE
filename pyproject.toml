@@ -20,15 +20,16 @@ package = true
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "ruff>=0.15.20",
 ]
 
 [tool.ruff.lint]
 select = [
-    "E", 
-    "F", 
-    "I", 
-    "UP", 
+    "E",
+    "F",
+    "I",
+    "UP",
     "B",
 ]
