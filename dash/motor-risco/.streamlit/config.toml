@@ -1,0 +1,28 @@
+# Tema do dashboard. As cores dos gráficos ficam em ui/tema.py e acompanham
+# o tema ativo (claro ou escuro) lido em tempo de execução.
+
+[theme]
+base = "light"
+font = "sans-serif"
+baseRadius = "0.5rem"
+showSidebarBorder = true
+
+[theme.light]
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f1f0ec"
+textColor = "#0b0b0b"
+borderColor = "#e1e0d9"
+
+[theme.dark]
+primaryColor = "#3987e5"
+backgroundColor = "#1a1a19"
+secondaryBackgroundColor = "#262624"
+textColor = "#ffffff"
+borderColor = "#383835"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

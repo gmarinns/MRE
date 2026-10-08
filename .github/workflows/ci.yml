@@ -22,3 +22,18 @@ jobs:
 
       - name: Testes
         run: uv run pytest
+
+  motor-calculo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar o motor e as dependências de teste
+        run: pip install -e "motor-calculo[dev]"
+
+      - name: Testes do motor de cálculo
+        run: pytest motor-calculo/tests

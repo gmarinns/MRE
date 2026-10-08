@@ -31,7 +31,7 @@ def kupiec_pof(violations: np.ndarray, confidence_level: float = 0.95) -> dict:
 
     ll_null = (n - x) * np.log(1 - p) + (x * np.log(p) if x else 0.0)
     if x == 0:
-        ll_alt = 0.0            # (1-0)^n = 1 -> log-verossimilhança nula, e NÃO LR = 0
+        ll_alt = 0.0  # (1-0)^n = 1 -> log-verossimilhança nula, e NÃO LR = 0
     elif x == n:
         ll_alt = 0.0
     else:
@@ -80,12 +80,15 @@ def christoffersen_independence(violations: np.ndarray) -> dict:
         "p_value": p_value,
         "df": 1,
         "transitions": {"00": n00, "01": n01, "10": n10, "11": n11},
-        "pi01": float(pi01), "pi11": float(pi11),
+        "pi01": float(pi01),
+        "pi11": float(pi11),
         "reject_h0": bool(p_value < 0.05),
     }
 
 
-def conditional_coverage(violations: np.ndarray, confidence_level: float = 0.95) -> dict:
+def conditional_coverage(
+    violations: np.ndarray, confidence_level: float = 0.95
+) -> dict:
     """LR_cc = LR_uc + LR_ind (χ² com 2 g.l.) — o teste conjunto de Christoffersen."""
     uc = kupiec_pof(violations, confidence_level)
     ind = christoffersen_independence(violations)
@@ -93,7 +96,9 @@ def conditional_coverage(violations: np.ndarray, confidence_level: float = 0.95)
     p_value = float(1 - stats.chi2.cdf(lr, df=2))
     return {
         "test": "Cobertura condicional (LR_cc)",
-        "lr_stat": float(lr), "p_value": p_value, "df": 2,
+        "lr_stat": float(lr),
+        "p_value": p_value,
+        "df": 2,
         "reject_h0": bool(p_value < 0.05),
         "components": {"LR_uc": uc["lr_stat"], "LR_ind": ind["lr_stat"]},
     }
@@ -106,23 +111,59 @@ def basel_traffic_light(violations: np.ndarray, confidence_level: float = 0.99) 
     p = 1.0 - confidence_level
     cum = float(stats.binom.cdf(x, n, p))
     if cum < 0.95:
-        zone, color, note = "Verde", "ok", "Modelo aceitável — sem acréscimo de capital."
+        zone, color, note = (
+            "Verde",
+            "ok",
+            "Modelo aceitável — sem acréscimo de capital.",
+        )
     elif cum < 0.9999:
-        zone, color, note = "Amarela", "warn", "Violações acima do esperado — acréscimo de capital progressivo."
+        zone, color, note = (
+            "Amarela",
+            "warn",
+            "Violações acima do esperado — acréscimo de capital progressivo.",
+        )
     else:
-        zone, color, note = "Vermelha", "risk", "Modelo rejeitado — revisão obrigatória."
+        zone, color, note = (
+            "Vermelha",
+            "risk",
+            "Modelo rejeitado — revisão obrigatória.",
+        )
     return {
-        "zone": zone, "color": color, "note": note,
-        "violations": x, "n_obs": n, "cumulative_prob": cum,
+        "zone": zone,
+        "color": color,
+        "note": note,
+        "violations": x,
+        "n_obs": n,
+        "cumulative_prob": cum,
         "reference": "Basel Committee (1996) — escalado para a amostra por binomial.",
     }
 
 
-def full_backtest(returns: np.ndarray, var_series: np.ndarray, confidence_level: float) -> dict:
+def basel_thresholds(n_obs: int, confidence_level: float = 0.99) -> dict:
+    """Número de violações em que começam as zonas amarela e vermelha.
+
+    Mesma regra de ``basel_traffic_light``: a zona amarela começa na primeira
+    contagem cuja probabilidade acumulada chega a 95%, a vermelha a 99,99%.
+    Para 250 dias a 99% isso reproduz a tabela de Basileia (5 e 10).
+    """
+    p = 1.0 - confidence_level
+    counts = np.arange(0, n_obs + 1)
+    cum = stats.binom.cdf(counts, n_obs, p)
+    return {
+        "yellow_from": int(counts[np.argmax(cum >= 0.95)]),
+        "red_from": int(counts[np.argmax(cum >= 0.9999)]),
+        "expected": float(n_obs * p),
+    }
+
+
+def full_backtest(
+    returns: np.ndarray, var_series: np.ndarray, confidence_level: float
+) -> dict:
     mask = violations_mask(returns, var_series)
     v = mask.astype(int)
     return {
         "mask": mask,
+        "thresholds": basel_thresholds(int(v.size), confidence_level),
         "kupiec": kupiec_pof(v, confidence_level),
         "independence": christoffersen_independence(v),
         "conditional": conditional_coverage(v, confidence_level),

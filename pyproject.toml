@@ -28,6 +28,14 @@ dev = [
     "ruff>=0.15.20",
 ]
 
+[tool.ruff]
+# Raízes de importação: o pacote principal, o motor de cálculo e o painel.
+src = ["src", "motor-calculo", "dash/motor-risco"]
+
+[tool.pytest.ini_options]
+# O motor de cálculo tem dependências próprias e roda em um job separado do CI.
+testpaths = ["tests"]
+
 [tool.ruff.lint]
 select = [
     "E",
