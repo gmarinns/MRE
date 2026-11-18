@@ -5,3 +5,14 @@ dash/motor-risco/.cache/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+data/
+.env
+tmp/
+
+# Material pessoal de estudo e apresentação (permanece apenas neste computador).
+output/
+docs/guia-estudo-defesa.md
+docs/roteiro-demo.md
+docs/fase2-plano.md
+docs/fase3-estudo.md
+tools/build_study_guide.py
