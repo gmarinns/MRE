@@ -8,6 +8,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: finprov
+          POSTGRES_PASSWORD: finprov
+          POSTGRES_DB: finprov_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finprov -d finprov_test_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FINPROV_TEST_DATABASE_URL: postgresql+psycopg2://finprov:finprov@localhost:5432/finprov_test_ci
     steps:
       - uses: actions/checkout@v4
 
@@ -15,13 +31,28 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Instalar dependências
-        run: uv sync --dev
+        run: uv sync --locked --dev
 
       - name: Lint
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests dash/motor-risco
 
       - name: Testes
         run: uv run pytest
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dash/motor-risco
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar interface e testes
+        run: pip install -r requirements.txt pytest
+      - name: Testar interface sem acesso ao mercado
+        run: python -m pytest tests -q
 
   motor-calculo:
     runs-on: ubuntu-latest
