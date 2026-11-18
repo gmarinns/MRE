@@ -1,54 +1,22 @@
-# Painel do motor de risco
+# Dashboard FinProv
 
-Interface Streamlit do FinProv. Só apresenta: todo cálculo vem do pacote
-`motor-calculo`, sempre por intermédio de `servicos.py`.
+Interface original do motor de risco, com navegação, gráficos, tema e cálculos preservados. O adaptador `dados.py` lê somente o PostgreSQL; `servicos.py` continua chamando `motor_calculo`. Não há coletor Yahoo ou fallback em arquivos no dashboard.
 
-## Como rodar
+No PowerShell, nesta pasta:
 
-A partir desta pasta, com o ambiente virtual ativo:
-
-```bash
-pip install -r requirements.txt
+```powershell
+$env:DATABASE_URL = 'postgresql+psycopg2://finprov:finprov@localhost:5432/finprov'
+uv venv .venv
+uv pip install --python .venv/Scripts/python.exe -r requirements.txt
+.venv/Scripts/python.exe -m streamlit run app.py --server.port 8502
 ```
 
-```bash
-streamlit run app.py
-```
+Se a venv já existir, pule sua criação, mas atualize as dependências. Abra http://localhost:8502. Consulte [o roteiro de execução](../../docs/teste-fase1.md) para preparar e popular o banco.
 
-Abre em `http://localhost:8501`.
+Cada renderização fixa a última execução ready; todos os ativos usam esse mesmo run_id, mostrado na barra lateral. O histórico de 1, 2 ou 5 anos termina na última data de preços dessa execução. O cache de consulta dura 30 segundos e inclui o run_id na chave. Atualizar a página consulta o banco novamente, sem coletar dados externos.
 
-## Páginas
+O fechamento ajustado e o fator adjusted_close / close ajustam OHLC para manter o contrato anterior do motor. O volume não é ajustado. As 12 ações da carteira ficam selecionadas por padrão, com pesos iguais na página Carteira; os controles originais permitem explorar outras configurações.
 
-| Página | Pergunta que responde |
-|---|---|
-| Painel | Quanto a posição pode perder? |
-| Value at Risk | Qual o limite de perda, por cinco métodos? |
-| Expected Shortfall | Quando o limite é rompido, de quanto é a perda? |
-| Volatilidade | O quanto o preço oscila, e isso está mudando? |
-| Drawdown | Qual a maior queda acumulada e quanto durou? |
-| Carteira | Quanto a diversificação reduz o risco? Quem puxa o risco? |
-| Stress | E se o mercado ficar muito mais turbulento? |
-| Backtesting | O VaR previsto no passado se confirmou? |
-| Proveniência (proposta) | Onde a proveniência entra. Ainda não implementada |
+Os cálculos do painel são interativos e não sobrescrevem resultados.relatorios. Eles podem diferir dos relatórios do ETL: o motor usa log-retornos e o período escolhido; o relatório persistido usa retornos simples e sua própria janela. Fundamentos, macro, previsão e qualidade continuam disponíveis no banco e na CLI; não foi criada uma nova interface para eles.
 
-## Estrutura
-
-```
-app.py            navegação e barra lateral
-paginas/          uma página por arquivo
-servicos.py       chama o motor e guarda o cache
-dados.py          cotações do Yahoo Finance + cópia local
-ui/tema.py        paleta, layout dos gráficos e formatação pt-BR
-ui/graficos.py    figuras Plotly
-ui/componentes.py cabeçalho, indicadores e cartão de gráfico
-```
-
-## Dados
-
-As cotações vêm do Yahoo Finance e ficam em cache por uma hora. Cada coleta
-bem-sucedida é gravada em `.cache/`. Sem rede, o painel usa a última coleta e
-avisa a data na barra lateral; sem rede e sem cópia, mostra um erro. Nenhum
-dado é simulado.
-
-Durante o pregão, a última barra é a cotação do momento: os números mudam ao
-longo do dia até o fechamento.
+Sem PostgreSQL acessível ou execução pronta, a interface informa o problema e não busca outra fonte. A suíte `tests` executa as nove páginas com o motor real e HTTP bloqueado.

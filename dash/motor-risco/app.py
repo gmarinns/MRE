@@ -22,19 +22,24 @@ st.set_page_config(
 )
 
 ATIVOS = {
-    "PETR4.SA": "Petrobras PN",
+    "AGRO3.SA": "BrasilAgro ON",
     "VALE3.SA": "Vale ON",
-    "ITUB4.SA": "Itaú Unibanco PN",
-    "BBAS3.SA": "Banco do Brasil ON",
-    "WEGE3.SA": "WEG ON",
+    "BBSE3.SA": "BB Seguridade ON",
+    "FLRY3.SA": "Fleury ON",
+    "SAPR4.SA": "Sanepar PN",
+    "GOAU3.SA": "Metalúrgica Gerdau ON",
+    "KLBN3.SA": "Klabin ON",
+    "PETR4.SA": "Petrobras PN",
     "ABEV3.SA": "Ambev ON",
-    "B3SA3.SA": "B3 ON",
+    "CPFE3.SA": "CPFL Energia ON",
+    "BBAS3.SA": "Banco do Brasil ON",
+    "VLID3.SA": "Valid ON",
     "^BVSP": "Ibovespa",
 }
 PERIODOS = {"1y": "1 ano", "2y": "2 anos", "5y": "5 anos"}
 
 PADRAO = {
-    "ativos": ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "WEGE3.SA"],
+    "ativos": [ticker for ticker in ATIVOS if ticker != "^BVSP"],
     "foco": "PETR4.SA",
     "periodo": "2y",
     "confianca": 0.95,
@@ -133,6 +138,7 @@ with st.sidebar:
 
 try:
     with st.spinner("Carregando cotações e calculando…"):
+        dados.selecionar_execucao()
         ctx = servicos.contexto()
 except dados.DadosIndisponiveis as erro:
     st.error(str(erro), icon=":material/cloud_off:")
@@ -140,17 +146,11 @@ except dados.DadosIndisponiveis as erro:
 
 with st.sidebar:
     cot = ctx.cotacoes
-    if cot.origem == "yahoo":
-        st.caption(
-            f":material/cloud_done: Yahoo Finance · {cot.pregoes} pregões até "
-            f"{cot.frame['date'].iloc[-1]:%d/%m/%Y}"
-        )
-    else:
-        st.warning(
-            f"Sem conexão com o Yahoo. Usando a coleta de "
-            f"{cot.coletado_em:%d/%m/%Y %H:%M}.",
-            icon=":material/cloud_off:",
-        )
+    st.caption(
+        f":material/storage: PostgreSQL · {cot.pregoes} pregões até "
+        f"{cot.frame['date'].iloc[-1]:%d/%m/%Y}"
+    )
+    st.caption(f"Execução: {cot.run_id}")
 
 st.session_state["_ctx"] = ctx
 pagina.run()

@@ -1,90 +1,127 @@
-"""Cotações do Yahoo Finance, com cópia local da última coleta.
+"""Adaptador PostgreSQL para o motor: sem coleta HTTP ou fallback em disco.
 
-Não existe dado sintético aqui. Se a rede falhar, o painel usa a última
-coleta real gravada em ``.cache/`` e informa a data; sem rede e sem cópia,
-levanta ``DadosIndisponiveis``.
+Cada renderização fixa uma execução ready. Todos os ativos usam essa mesma
+versão. OHLC é ajustado pelo fator adjusted_close / close, como no painel original.
 """
 
 from __future__ import annotations
 
-import re
+import os
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import psycopg2
 import streamlit as st
-import yfinance as yf
 
-PASTA_CACHE = Path(__file__).parent / ".cache"
-COLUNAS = ["date", "open", "high", "low", "close", "volume"]
+from finprov.storage.database import Database
+
 MINIMO_PREGOES = 60
 
 
 class DadosIndisponiveis(RuntimeError):
-    """Não foi possível obter cotações nem da rede nem da cópia local."""
+    """Não há dados válidos suficientes na execução do PostgreSQL."""
 
 
 @dataclass(frozen=True)
 class Cotacoes:
     ticker: str
     frame: pd.DataFrame
-    origem: str  # "yahoo" | "cache"
+    origem: str
     coletado_em: datetime
+    run_id: str
 
     @property
     def pregoes(self) -> int:
         return len(self.frame)
 
 
-def _arquivo(ticker: str, periodo: str) -> Path:
-    nome = re.sub(r"[^A-Za-z0-9]+", "_", ticker).strip("_")
-    return PASTA_CACHE / f"{nome}_{periodo}.parquet"
-
-
-def _baixar(ticker: str, periodo: str) -> pd.DataFrame | None:
+def selecionar_execucao() -> str:
+    """Resolve latest uma vez por renderização, sem misturar versões de ativos."""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise DadosIndisponiveis("Configure DATABASE_URL para acessar o PostgreSQL.")
     try:
-        bruto = yf.download(
-            ticker,
-            period=periodo,
-            interval="1d",
-            progress=False,
-            auto_adjust=True,
-            threads=False,
+        run_id = Database(url).resolve_run()
+    except (psycopg2.Error, ValueError) as exc:
+        raise DadosIndisponiveis(
+            "Não foi possível acessar uma execução ready no PostgreSQL. "
+            "Verifique o banco e execute a coleta pelo ETL. "
+            "Nenhuma coleta alternativa foi usada."
+        ) from exc
+    st.session_state["_data_run_id"] = run_id
+    return run_id
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _precos_execucao(url: str, run_id: str) -> pd.DataFrame:
+    with Database(url).connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT p.ticker,p.date,p.open,p.high,p.low,p.close,"
+            "p.adjusted_close,p.volume,e.started_at "
+            "FROM curated.precos p JOIN controle.execucoes e USING (run_id) "
+            "WHERE p.run_id=%s AND e.status='ready' ORDER BY p.date,p.ticker",
+            (run_id,),
         )
-    except Exception:
-        return None
-    if bruto is None or bruto.empty:
-        return None
-    if isinstance(bruto.columns, pd.MultiIndex):
-        bruto.columns = bruto.columns.get_level_values(0)
-    frame = bruto.reset_index()
-    frame.columns = [str(c).lower() for c in frame.columns]
-    if "close" not in frame.columns or "date" not in frame.columns:
-        return None
-    frame["date"] = pd.to_datetime(frame["date"]).dt.tz_localize(None)
-    frame = frame[[c for c in COLUNAS if c in frame.columns]]
-    frame = frame.dropna(subset=["close"]).reset_index(drop=True)
-    return frame if len(frame) >= MINIMO_PREGOES else None
+        return pd.DataFrame(
+            cur.fetchall(),
+            columns=[
+                "ticker",
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "adjusted_close",
+                "volume",
+                "started_at",
+            ],
+        )
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def carregar(ticker: str, periodo: str = "2y") -> Cotacoes:
-    """Baixa do Yahoo e grava a cópia local; na falha, lê a cópia."""
-    arquivo = _arquivo(ticker, periodo)
-    frame = _baixar(ticker, periodo)
-    if frame is not None:
-        PASTA_CACHE.mkdir(exist_ok=True)
-        frame.to_parquet(arquivo, index=False)
-        return Cotacoes(ticker, frame, "yahoo", datetime.now())
-    if arquivo.exists():
-        coletado = datetime.fromtimestamp(arquivo.stat().st_mtime)
-        return Cotacoes(ticker, pd.read_parquet(arquivo), "cache", coletado)
-    raise DadosIndisponiveis(
-        f"Sem cotações para {ticker}: o Yahoo Finance não respondeu e não há "
-        "cópia local de uma coleta anterior."
+    """Lê preços da execução fixada; período termina na última data dessa execução."""
+    if periodo not in {"1y", "2y", "5y"}:
+        raise DadosIndisponiveis("Período de histórico inválido.")
+    run_id = st.session_state.get("_data_run_id") or selecionar_execucao()
+    try:
+        bruto = _precos_execucao(os.environ["DATABASE_URL"], run_id)
+    except (psycopg2.Error, ValueError, KeyError) as exc:
+        raise DadosIndisponiveis(
+            "Não foi possível ler os preços do PostgreSQL. "
+            "Nenhuma coleta alternativa foi usada."
+        ) from exc
+    if bruto.empty:
+        raise DadosIndisponiveis("A execução selecionada não possui preços.")
+    fim = pd.to_datetime(bruto["date"]).max()
+    inicio = fim - pd.DateOffset(years=int(periodo[0]))
+    frame = bruto.loc[bruto.ticker == ticker.removesuffix(".SA")].copy()
+    frame["date"] = pd.to_datetime(frame["date"])
+    frame = frame.loc[frame.date > inicio].sort_values("date")
+    colunas = ["open", "high", "low", "close", "adjusted_close", "volume"]
+    frame[colunas] = frame[colunas].apply(pd.to_numeric, errors="coerce")
+    validos = np.isfinite(
+        frame[["open", "high", "low", "close", "adjusted_close"]]
+    ).all(axis=1)
+    validos &= (frame[["open", "high", "low", "close", "adjusted_close"]] > 0).all(
+        axis=1
     )
+    frame = frame.loc[validos].copy()
+    if len(frame) < MINIMO_PREGOES:
+        raise DadosIndisponiveis(
+            f"Sem histórico suficiente para {ticker} no PostgreSQL: "
+            f"{len(frame)} pregões válidos; mínimo {MINIMO_PREGOES}."
+        )
+    fator = frame["adjusted_close"] / frame["close"]
+    frame[["open", "high", "low", "close"]] = frame[
+        ["open", "high", "low", "close"]
+    ].mul(fator, axis=0)
+    coletado_em = pd.Timestamp(frame["started_at"].iloc[0]).to_pydatetime()
+    frame = frame[["date", "open", "high", "low", "close", "volume"]].reset_index(
+        drop=True
+    )
+    return Cotacoes(ticker, frame, "postgresql", coletado_em, run_id)
 
 
 def log_retornos(frame: pd.DataFrame) -> np.ndarray:
@@ -96,7 +133,6 @@ def datas_dos_retornos(frame: pd.DataFrame) -> pd.Series:
     return pd.to_datetime(frame["date"]).iloc[1:].reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def matriz_de_retornos(
     tickers: tuple[str, ...], periodo: str
 ) -> tuple[pd.DataFrame, list[str]]:
