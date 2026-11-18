@@ -1,10 +1,12 @@
 [project]
 name = "mre"
 version = "0.1.0"
-description = "Add your description here"
+description = "ETL financeiro e risco de mercado com PostgreSQL e rastreabilidade"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4>=4.12",
+    "scikit-learn>=1.5",
     "numpy>=2.5.0",
     "pandas>=3.0.3",
     "psycopg2-binary>=2.9.12",

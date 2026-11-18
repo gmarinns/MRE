@@ -1,0 +1,6 @@
+[portfolio]
+name = "Carteira TCC - 12 ativos"
+tickers = ["AGRO3", "VALE3", "BBSE3", "FLRY3", "SAPR4", "GOAU3", "KLBN3", "PETR4", "ABEV3", "CPFE3", "BBAS3", "VLID3"]
+weighting = "equal"
+# Pesos iguais em valor financeiro: 1/12 por ativo, não quantidades iguais.
+# Para pesos próprios: weighting = "custom" e weights = [...] somando 1.

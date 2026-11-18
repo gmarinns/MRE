@@ -1,38 +1,19 @@
-import json
+"""Yahoo Chart: preços e eventos, sem efeitos colaterais na importação."""
 
-import requests
-from sqlalchemy import create_engine, text
+from datetime import UTC, date, datetime
 
-DATABASE_URL = "postgresql+psycopg2://finprov:finprov@localhost:5432/finprov"
-TICKER = "PETR4.SA"
 
-url = f"https://query1.finance.yahoo.com/v8/finance/chart/{TICKER}"
-response = requests.get(
-    url,
-    params={"range": "1y", "interval": "1d"},
-    headers={"User-Agent": "Mozilla/5.0"},
-    timeout=30,
-)
-response.raise_for_status()  # falha alto se não for 200
-
-dados_json = response.json()
-engine = create_engine(DATABASE_URL)
-
-with engine.begin() as conn:
-    conn.execute(text("CREATE SCHEMA IF NOT EXISTS raw"))
-    conn.execute(
-        text("""
-        CREATE TABLE IF NOT EXISTS raw.cotacoes (
-            id          BIGSERIAL PRIMARY KEY,
-            ticker      TEXT        NOT NULL,
-            coletado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
-            payload     JSONB       NOT NULL
-        )
-    """)
+def request_spec(ticker: str, start: date, end: date) -> tuple[str, dict]:
+    if start >= end:
+        raise ValueError("O fim exclusivo deve ser posterior ao início.")
+    symbol = (
+        ticker if ticker.startswith("^") or ticker.endswith(".SA") else ticker + ".SA"
     )
-    conn.execute(
-        text("INSERT INTO raw.cotacoes (ticker, payload) VALUES (:t, :p)"),
-        {"t": TICKER, "p": json.dumps(dados_json)},
-    )
-
-print(f"ok: {TICKER}")
+    params = {
+        "period1": int(datetime.combine(start, datetime.min.time(), UTC).timestamp()),
+        "period2": int(datetime.combine(end, datetime.min.time(), UTC).timestamp()),
+        "interval": "1d",
+        "events": "div,splits",
+        "includeAdjustedClose": "true",
+    }
+    return f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}", params
