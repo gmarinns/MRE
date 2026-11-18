@@ -1,6 +1,6 @@
 # Dashboard FinProv
 
-Interface original do motor de risco, com navegação, gráficos, tema e cálculos preservados. O adaptador `dados.py` lê somente o PostgreSQL; `servicos.py` continua chamando `motor_calculo`. Não há coletor Yahoo ou fallback em arquivos no dashboard.
+Interface original do motor de risco, com navegação, gráficos, tema e cálculos preservados. O adaptador `finprov_dashboard/dados.py` lê somente o PostgreSQL; `finprov_dashboard/servicos.py` continua chamando `motor_calculo`. Não há coletor Yahoo ou fallback em arquivos no dashboard.
 
 No PowerShell, nesta pasta:
 

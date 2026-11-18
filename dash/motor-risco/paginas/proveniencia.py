@@ -3,7 +3,7 @@
 import pandas as pd
 import streamlit as st
 
-import servicos
+from finprov_dashboard import servicos
 from ui import componentes as ui
 from ui.tema import ROTULO_METODO, cores, pct
 

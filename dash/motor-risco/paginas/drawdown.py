@@ -3,7 +3,7 @@
 import pandas as pd
 import streamlit as st
 
-import servicos
+from finprov_dashboard import servicos
 from ui import componentes as ui
 from ui import graficos
 from ui.tema import brl, pct

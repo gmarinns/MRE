@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-import dados
+from finprov_dashboard import dados
 from motor_calculo import (
     backtesting,
     drawdown,

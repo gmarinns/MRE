@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-import dados
-import servicos
+from finprov_dashboard import dados, servicos
 
 st.set_page_config(
     page_title="FinProv · Motor de Risco",

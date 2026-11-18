@@ -14,7 +14,7 @@ from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import dados  # noqa: E402
+from finprov_dashboard import dados  # noqa: E402
 from motor_calculo import var  # noqa: E402
 
 RUN_ID = "00000000-0000-0000-0000-000000000001"
@@ -177,3 +177,20 @@ def test_missing_asset_does_not_fetch_market():
     dados.selecionar_execucao()
     with pytest.raises(dados.DadosIndisponiveis, match="histórico suficiente"):
         dados.carregar("UNKNOWN.SA")
+
+
+def test_legacy_modules_in_memory_do_not_shadow_postgres(monkeypatch):
+    """Um servidor já aberto pode conservar os imports do dashboard antigo."""
+    from types import ModuleType
+
+    monkeypatch.setitem(sys.modules, "dados", ModuleType("dados"))
+    monkeypatch.setitem(sys.modules, "servicos", ModuleType("servicos"))
+    view = app()
+    assert not view.exception
+    view.switch_page("paginas/drawdown.py").run()
+    assert not view.exception
+    assert view.session_state["_ctx"].cotacoes.origem == "postgresql"
+    assert view.get("plotly_chart")
+    view.switch_page("paginas/carteira.py").run()
+    assert not view.exception
+    assert view.get("plotly_chart")
